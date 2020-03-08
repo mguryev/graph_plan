@@ -1,25 +1,15 @@
 import collections
 import itertools
+import json
 import logging
+import operator
 import typing
 
 import attr
 
 
 log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
-
-
-@attr.s
-class ActionLayer(object):
-    actions = attr.ib(type=typing.List['Action'])
-    mutex_actions = attr.ib(type=typing.Dict['Action', typing.Set['Action']], default=attr.Factory(dict))
-
-
-@attr.s
-class PropositionLayer(object):
-    propositions = attr.ib(type=typing.Set[str])
-    mutex_propositions = attr.ib(type=typing.Dict[str, typing.Set[str]], default=attr.Factory(dict))
+logging.basicConfig(level=logging.INFO)
 
 
 PropositionLabel = str
@@ -34,6 +24,23 @@ class Layer(object):
 
     def copy(self, **changes):
         return attr.evolve(self, **changes)
+
+    def describe(self):
+        return {
+            'actions': [action.name for action in self.actions],
+            'propositions': list(self.propositions),
+            'mutex_actions': {
+                action.name: [mutex_action.name for mutex_action in mutex_actions]
+                for action, mutex_actions in self.mutex_actions.items()
+            },
+            'mutex_propositions': {
+                proposition: list(mutex_propositions)
+                for proposition, mutex_propositions in self.mutex_propositions.items()
+            }
+        }
+
+    def __str__(self):
+        return json.dumps(self.describe())
 
 
 @attr.s(frozen=True)
@@ -90,6 +97,7 @@ class Planner(object):
 
         log.info('Noop actions: %s', noop_actions)
         log.info('Next actions: %s', next_actions)
+
         return noop_actions + next_actions
 
     @classmethod
@@ -228,7 +236,7 @@ class Planner(object):
         return layers[-1] == layers[-2]
 
     def _goal_is_action_set_mutex(
-        self, action_mutex: typing.Dict['Action', typing.Set['Action']], *actions: typing.List[Action]
+        self, action_mutex: typing.Dict['Action', typing.Set['Action']], actions: typing.List[Action]
     ):
         return any(
             action_b in action_mutex.get(action_a, set())
@@ -256,13 +264,13 @@ class Planner(object):
 
         goal_actions = [
             prop_actions[proposition]
-            for proposition in goal
+            for proposition in sorted(goal)
         ]
 
         return (
             set(action_set)
             for action_set in itertools.product(*goal_actions)
-            if not self._goal_is_action_set_mutex(mutex_actions, *action_set)
+            if not self._goal_is_action_set_mutex(mutex_actions, action_set)
         )
 
     def _goal_calculate_subgoal(
@@ -284,7 +292,7 @@ class Planner(object):
             return []
 
         current_layer = layers[-1]
-        log.info('Current layer: %s', current_layer)
+        log.info('Current layers: %s', [str(x) for x in layers])
 
         if not self._plan_goal_reached(current_layer, goal):
             log.info('Goal is not reached in the current layer. Solution is not found')
@@ -311,7 +319,7 @@ class Planner(object):
             log.info('Ran out of action sets. Solution is not found')
             raise PlanNotFound()
 
-        log.info('Plan is found!')
+        log.info('Plan is found! %s', plan_actions)
         return plan_actions
 
     def plan(

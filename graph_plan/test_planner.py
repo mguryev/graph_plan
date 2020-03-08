@@ -67,7 +67,7 @@ def test_next_actions_missing_requirements():
         ],
     )
 
-    assert possible_actions ==[]
+    assert possible_actions == []
 
 
 def test_next_actions_noop():
@@ -199,6 +199,20 @@ def test_next_propositions_mutex():
     }
 
 
+# def test_extend_graph():
+#     builder = GraphBuilder()
+#
+#     next_layer = builder.extend_graph(
+#         current_state=build_layer(),
+#         available_actions=[],
+#     )
+#
+#     assert next_layer == Layer(
+#         actions=[],
+#         propositions=set(),
+#     )
+
+
 @pytest.mark.parametrize(
     'goal, propositions, mutex_propositions, reached',
     [(
@@ -226,11 +240,6 @@ def test_goal_reached(propositions, mutex_propositions, goal, reached):
         layer,
         goal,
     ) == reached
-
-
-# DONE: calculate plan stalled
-# DONE: calculate pre-requisites
-# TODO: calculate plan(integration)
 
 
 @pytest.mark.parametrize(
@@ -350,7 +359,7 @@ def test_plan_simple():
         }
     ) == [
         add_x,
-        add_y,
         replace_x_z,
         add_x,
+        add_y,
     ]
