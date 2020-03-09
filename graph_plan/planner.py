@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 PropositionLabel = str
 
 
-@attr.s
+@attr.s(repr=False)
 class Layer(object):
     actions = attr.ib(type=typing.List['Action'])
     propositions = attr.ib(type=typing.Set[PropositionLabel])
@@ -39,7 +39,7 @@ class Layer(object):
             }
         }
 
-    def __str__(self):
+    def __repr__(self):
         return json.dumps(self.describe())
 
 
@@ -62,7 +62,7 @@ class PlanNotPossible(BaseException):
     pass
 
 
-class Planner(object):
+class GraphBuilder(object):
     @classmethod
     def _action_requirements_met(cls, state: Layer, action: Action):
         log.debug('Validating action requirements for {}'.format(action.name))
@@ -127,9 +127,9 @@ class Planner(object):
 
     @classmethod
     def _calculate_actions_mutex(
-        cls,
-        previous_state: Layer,
-        possible_actions: typing.List[Action],
+            cls,
+            previous_state: Layer,
+            possible_actions: typing.List[Action],
     ) -> typing.Dict[Action, typing.Set[Action]]:
         mutex = collections.defaultdict(set)
 
@@ -142,7 +142,7 @@ class Planner(object):
 
     @classmethod
     def _calculate_propositions(
-        cls,
+            cls,
             previous_state: Layer, actions: typing.List[Action],
     ) -> typing.Set[PropositionLabel]:
         propositions = [
@@ -154,17 +154,17 @@ class Planner(object):
 
     @classmethod
     def _calculate_propositions_mutex(
-        cls,
-        previous_state: Layer,
-        actions: typing.List[Action],
-        mutex_actions: typing.Dict[Action, typing.Set[Action]],
+            cls,
+            previous_state: Layer,
+            actions: typing.List[Action],
+            mutex_actions: typing.Dict[Action, typing.Set[Action]],
     ) -> typing.Dict[PropositionLabel, typing.Set[PropositionLabel]]:
         prop_actions = collections.defaultdict(list)
 
         for proposition, action in (
-            (proposition, action)
-            for action in actions
-            for proposition in action.add_effects
+                (proposition, action)
+                for action in actions
+                for proposition in action.add_effects
         ):
             log.info('Proposition %s - action %s', proposition, action)
             prop_actions[proposition].append(action)
@@ -202,6 +202,11 @@ class Planner(object):
             propositions=next_propositions,
             mutex_propositions=mutex_propositions,
         )
+
+
+class Planner(object):
+    def __init__(self):
+        self.graph_builder = GraphBuilder()
 
     def _plan_goal_reached(
         self,
@@ -292,7 +297,7 @@ class Planner(object):
             return []
 
         current_layer = layers[-1]
-        log.info('Current layers: %s', [str(x) for x in layers])
+        log.info('Current layers: %s', layers)
 
         if not self._plan_goal_reached(current_layer, goal):
             log.info('Goal is not reached in the current layer. Solution is not found')
@@ -347,7 +352,7 @@ class Planner(object):
             current_layer = layers[-1]
 
             log.info('Current layer: %s', current_layer)
-            next_layer = self.calculate_next_layer(current_layer, actions)
+            next_layer = self.graph_builder.calculate_next_layer(current_layer, actions)
 
             log.info('Next layer: %s', next_layer)
             layers += [next_layer]

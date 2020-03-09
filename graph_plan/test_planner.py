@@ -1,6 +1,7 @@
 import pytest
 
 from .planner import Planner, Action, Layer
+from .planner import GraphBuilder
 
 
 def build_layer(**kwargs):
@@ -16,10 +17,21 @@ def build_layer(**kwargs):
     )
 
 
-def test_build_layer_empty():
-    planner = Planner()
+def build_action(name, **kwargs):
+    action_template = Action(
+        name=name,
+        requirements=set(),
+        add_effects=set(),
+        delete_effects=set(),
+    )
 
-    next_layer = planner.calculate_next_layer(
+    return action_template.copy(**kwargs)
+
+
+def test_graph_layer_build_empty():
+    builder = GraphBuilder()
+
+    next_layer = builder.calculate_next_layer(
         current_state=build_layer(),
         available_actions=[],
     )
@@ -30,48 +42,58 @@ def test_build_layer_empty():
     )
 
 
-def test_next_actions():
-    planner = Planner()
+def test_graph_layer_add_actions():
+    builder = GraphBuilder()
 
     action_add_x = Action(
         name='add_x',
-        requirements={},
-        add_effects={},
-        delete_effects={},
+        requirements=set(),
+        add_effects=set(),
+        delete_effects=set(),
     )
 
-    possible_actions = planner._calculate_actions(
+    next_layer = builder.calculate_next_layer(
         current_state=build_layer(),
         available_actions=[
             action_add_x
-        ],
+        ]
     )
 
-    assert possible_actions == [action_add_x]
+    assert next_layer.actions == [action_add_x]
 
 
-def test_next_actions_missing_requirements():
-    planner = Planner()
+def test_graph_layer_action_requirements():
+    builder = GraphBuilder()
 
-    action_add_x = Action(
-        name='require_x',
-        requirements={'x': True},
-        add_effects={},
-        delete_effects={},
+    action = Action(
+        name='add_x',
+        requirements=set('not_met_requirement'),
+        add_effects=set(),
+        delete_effects=set(),
     )
 
-    possible_actions = planner._calculate_actions(
+    next_layer = builder.calculate_next_layer(
         current_state=build_layer(),
         available_actions=[
-            action_add_x
-        ],
+            action
+        ]
     )
 
-    assert possible_actions == []
+    assert next_layer == Layer(
+        actions=[],
+        propositions=set(),
+    )
 
 
-def test_next_actions_noop():
-    planner = Planner()
+def test_graph_layer_actions_noop():
+    builder = GraphBuilder()
+
+    next_layer = builder.calculate_next_layer(
+        current_state=build_layer(
+            propositions={'x'},
+        ),
+        available_actions=[],
+    )
 
     noop_action = Action(
         name='noop_x',
@@ -80,64 +102,38 @@ def test_next_actions_noop():
         delete_effects=set(),
     )
 
-    possible_actions = planner._calculate_actions(
-        current_state=build_layer(
-            propositions={'x'},
-        ),
-        available_actions=[],
-    )
-
-    assert possible_actions == [noop_action]
+    assert next_layer.actions == [noop_action]
 
 
 @pytest.mark.parametrize(
-    'action_a_kwargs, action_b_kwargs', [
-        ({'add_effects': {'x'}}, {'delete_effects': {'x'}}),
-        ({'delete_effects': {'x'}}, {'add_effects': {'x'}}),
-        ({'requirements': {'x'}}, {'delete_effects': {'x'}}),
-        ({'delete_effects': {'x'}}, {'requirements': {'x'}}),
-        ({'requirements': {'a'}}, {'requirements': {'b'}}),
-        ({'requirements': {'b'}}, {'requirements': {'a'}}),
-    ])
-def test_next_actions_mutex(action_a_kwargs, action_b_kwargs):
-    planner = Planner()
-
-    default_action = Action(
-        name='default',
-        requirements=set(),
-        add_effects=set(),
-        delete_effects=set(),
-    )
-
-    action_a = default_action.copy(
-        name='action_a',
-        **action_a_kwargs,
-    )
-
-    action_b = default_action.copy(
-        name='action_b',
-        **action_b_kwargs,
-    )
-
-    mutex = planner._calculate_actions_mutex(
-        previous_state=Layer(
-            actions=[],
-            propositions=set(),
-            mutex_propositions={
-                'a': {'b'},
-                'b': {'a'},
-            }
+    'action_a_kwargs, action_b_kwargs, state_kwargs', [
+        ({'add_effects': {'x'}}, {'delete_effects': {'x'}}, {}),
+        ({'delete_effects': {'x'}}, {'add_effects': {'x'}}, {'propositions': {'x'}}),
+        ({'requirements': {'x'}}, {'delete_effects': {'x'}}, {'propositions': {'x'}}),
+        ({'delete_effects': {'x'}}, {'requirements': {'x'}}, {'propositions': {'x'}}),
+        (
+            {'requirements': {'a'}}, {'requirements': {'b'}},
+            {'propositions': {'a', 'b'}, 'mutex_propositions': {'a': {'b'}, 'b': {'a'}}}
         ),
-        possible_actions=[
+    ])
+def test_graph_layer_actions_mutex(action_a_kwargs, action_b_kwargs, state_kwargs):
+    builder = GraphBuilder()
+
+    action_a = build_action(name='action_a', **action_a_kwargs)
+    action_b = build_action(name='action_b', **action_b_kwargs)
+
+    next_layer = builder.calculate_next_layer(
+        current_state=build_layer(**state_kwargs),
+        available_actions=[
             action_a,
             action_b,
         ],
     )
 
-    assert mutex == {
-        action_a: {action_b},
-        action_b: {action_a},
-    }
+    assert (
+        action_b in next_layer.mutex_actions.get(action_a)
+        and action_a in next_layer.mutex_actions.get(action_b)
+    )
 
 
 @pytest.mark.parametrize(
@@ -147,54 +143,34 @@ def test_next_actions_mutex(action_a_kwargs, action_b_kwargs):
         ({'add_effects': {'x'}, 'delete_effects': {'x'}}, {'x'}),
         ({'add_effects': {'x'}, 'delete_effects': {'y'}}, {'x', 'y'}),
     ])
-def test_next_propositions(action_kwargs, expected_propositions):
-    planner = Planner()
+def test_graph_layer_propositions(action_kwargs, expected_propositions):
+    builder = GraphBuilder()
 
-    action = Action(
-        name='action',
-        requirements=set(),
-        add_effects=set(),
-        delete_effects=set(),
+    action = build_action('action', **action_kwargs)
+
+    next_layer = builder.calculate_next_layer(
+        current_state=build_layer(),
+        available_actions=[action]
     )
 
-    action = action.copy(**action_kwargs)
+    assert next_layer.propositions == expected_propositions
 
-    next_propositions = planner._calculate_propositions(
-        previous_state=build_layer(),
-        actions=[
-            action
+
+def test_graph_layer_propositions_mutex():
+    builder = GraphBuilder()
+
+    action_a = build_action(name='action_a', add_effects={'x', 'z'}, delete_effects={'y'})
+    action_b = build_action(name='action_b', add_effects={'y', 'z'}, delete_effects={'x'})
+
+    next_layer = builder.calculate_next_layer(
+        current_state=build_layer(),
+        available_actions=[
+            action_a,
+            action_b,
         ]
     )
 
-    assert next_propositions == expected_propositions
-
-
-def test_next_propositions_mutex():
-    planner = Planner()
-
-    default_action = Action(
-        name='action',
-        requirements=set(),
-        add_effects=set(),
-        delete_effects=set(),
-    )
-
-    action_a = default_action.copy(name='action_a', add_effects={'x', 'z'})
-    action_b = default_action.copy(name='action_b', add_effects={'y', 'z'})
-
-    mutex_propositions = planner._calculate_propositions_mutex(
-        previous_state=build_layer(),
-        actions=[
-            action_a,
-            action_b,
-        ],
-        mutex_actions={
-            action_a: {action_b},
-            action_b: {action_a},
-        },
-    )
-
-    assert mutex_propositions == {
+    assert next_layer.mutex_propositions == {
         'x': {'y'}, 'y': {'x'}
     }
 
