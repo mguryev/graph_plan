@@ -53,6 +53,15 @@ class Action(object):
     def copy(self, **changes):
         return attr.evolve(self, **changes)
 
+    @classmethod
+    def noop_action(cls, proposition):
+        return cls(
+            name=f'noop_{proposition}',
+            requirements={proposition},
+            add_effects={proposition},
+            delete_effects=set(),
+        )
+
 
 class PlanNotFound(BaseException):
     pass
@@ -72,19 +81,10 @@ class GraphBuilder(object):
         )
 
     @classmethod
-    def _create_noop_action(cls, proposition) -> Action:
-        return Action(
-            name=f'noop_{proposition}',
-            requirements={proposition},
-            add_effects={proposition},
-            delete_effects=set(),
-        )
-
-    @classmethod
     def _calculate_actions(cls, current_state: Layer, available_actions) -> typing.List[Action]:
         log.info('Generating noop actions')
         noop_actions = [
-            cls._create_noop_action(proposition=proposition)
+            Action.noop_action(proposition=proposition)
             for proposition in current_state.propositions
         ]
 
@@ -204,10 +204,7 @@ class GraphBuilder(object):
         )
 
 
-class Planner(object):
-    def __init__(self):
-        self.graph_builder = GraphBuilder()
-
+class GraphSolver(object):
     def _plan_goal_reached(
         self,
         # propositions: typing.Set[PropositionLabel],
@@ -237,6 +234,9 @@ class Planner(object):
 
     def _plan_is_stalled(self, layers: typing.List[Layer]):
         log.info('Checking if plan has stalled')
+
+        if len(layers) < 2:
+            return False
 
         return layers[-1] == layers[-2]
 
@@ -287,7 +287,7 @@ class Planner(object):
             for proposition in action.requirements
         }
 
-    def _search_for_solution(
+    def search_for_solution(
         self, layers: typing.List[Layer], goal: typing.Set[PropositionLabel]
     ) -> typing.List[Action]:
         log.info('Searching for solution for goal: %s', goal)
@@ -295,6 +295,9 @@ class Planner(object):
         if goal == set():
             log.info('Goal is achieved!')
             return []
+
+        if self._plan_is_stalled(layers):
+            raise PlanNotPossible()
 
         current_layer = layers[-1]
         log.info('Current layers: %s', layers)
@@ -311,7 +314,7 @@ class Planner(object):
             log.info('Sub-goal: %s', sub_goal)
 
             try:
-                subgoal_actions = self._search_for_solution(layers[:-1], sub_goal)
+                subgoal_actions = self.search_for_solution(layers[:-1], sub_goal)
 
             except PlanNotFound:
                 log.info('No plan found in action set')
@@ -327,6 +330,12 @@ class Planner(object):
         log.info('Plan is found! %s', plan_actions)
         return plan_actions
 
+
+class Planner(object):
+    def __init__(self):
+        self.graph_builder = GraphBuilder()
+        self.graph_solver = GraphSolver()
+
     def plan(
             self,
             state: typing.Set[PropositionLabel],
@@ -335,7 +344,6 @@ class Planner(object):
     ) -> typing.List[Action]:
         log.info('Starting to search for plan')
 
-        plan_possible = True
         layers = [
             Layer(
                 actions=[],
@@ -345,9 +353,9 @@ class Planner(object):
             )
         ]
 
-        plan = []
+        plan_found = False
 
-        while plan_possible:
+        while not plan_found:
             log.info('Attempting to find solution by adding a layer')
             current_layer = layers[-1]
 
@@ -357,18 +365,20 @@ class Planner(object):
             log.info('Next layer: %s', next_layer)
             layers += [next_layer]
 
-            plan_possible = not self._plan_is_stalled(layers)
-            log.info('Is plan possible: %s', plan_possible)
-
             try:
                 log.info('Searching for plan in current layers')
-                plan = self._search_for_solution(layers, goal)
-                break
+                plan = self.graph_solver.search_for_solution(layers, goal)
+                plan_found = True
 
             except PlanNotFound:
                 log.info('Plan not found in current layers')
+                continue
 
-        if not plan_possible:
+            except PlanNotPossible:
+                log.info('Plan is not possible')
+                break
+
+        if not plan_found:
             log.info('Plan does not seem to be possible')
             raise PlanNotPossible
 

@@ -1,7 +1,8 @@
 import pytest
 
 from .planner import Planner, Action, Layer
-from .planner import GraphBuilder
+from .planner import GraphBuilder, GraphSolver
+from .planner import PlanNotFound, PlanNotPossible
 
 
 def build_layer(**kwargs):
@@ -175,130 +176,68 @@ def test_graph_layer_propositions_mutex():
     }
 
 
-# def test_extend_graph():
-#     builder = GraphBuilder()
-#
-#     next_layer = builder.extend_graph(
-#         current_state=build_layer(),
-#         available_actions=[],
-#     )
-#
-#     assert next_layer == Layer(
-#         actions=[],
-#         propositions=set(),
-#     )
+def test_graph_goal_found():
+    add_x = build_action(name='add_x', add_effects={'x'})
 
-
-@pytest.mark.parametrize(
-    'goal, propositions, mutex_propositions, reached',
-    [(
-        {'x', 'y'}, {'x', 'y'}, {}, True
-    ), (
-        {'x', 'y'}, {'x', 'y', 'z'}, {'y': {'z'}, 'z': {'y'}}, True
-    ), (
-        {'x'}, {'x', 'y'}, {}, True
-    ), (
-        {'x', 'y'}, {'x'}, {}, False
-    ), (
-        {'x', 'y'}, {'x', 'y'}, {'x': {'y'}, 'y': {'x'}}, False
-    )])
-def test_goal_reached(propositions, mutex_propositions, goal, reached):
-    planner = Planner()
-
-    layer = Layer(
-        actions=[],
-        mutex_actions={},
-        propositions=propositions,
-        mutex_propositions=mutex_propositions,
-    )
-
-    assert planner._plan_goal_reached(
-        layer,
-        goal,
-    ) == reached
-
-
-@pytest.mark.parametrize(
-    'layers, stalled', [(
-        [{'propositions': {'x'}}, {'propositions': {'x'}}], True
-    ), (
-        [{'propositions': {'x'}}, {'propositions': {'x', 'y'}}], False
-    )]
-)
-def test_plan_stalled(layers, stalled):
-    planner = Planner()
-
-    layers = [
-        build_layer(**layer_args)
-        for layer_args in layers
-    ]
-
-    assert planner._plan_is_stalled(layers) == stalled
-
-
-def test_search_goal_actions():
-    planner = Planner()
-
-    add_x = Action(
-        name='add_x',
-        requirements=set(),
-        add_effects={'x'},
-        delete_effects=set(),
-    )
-    add_y = Action(
-        name='add_y',
-        requirements=set(),
-        add_effects={'y'},
-        delete_effects=set(),
-    )
-    add_x_mutex = Action(
-        name='add_x_mutex',
-        requirements=set(),
-        add_effects={'y'},
-        delete_effects=set(),
-    )
-
-    layer = Layer(
-        actions=[
-            add_x,
-            add_y,
-            add_x_mutex,
-        ],
-        propositions={'x', 'y'},
-        mutex_actions={add_x: {add_x_mutex}, add_x_mutex: {add_x}},
-        mutex_propositions={},
-    )
-
-    goal = {'x', 'y'}
-
-    goal_actions = [
-        {add_x, add_y},
-    ]
-
-    assert list(planner._goal_search_actions(layer, goal)) == goal_actions
-
-
-def test_calculate_subgoal():
-    planner = Planner()
-
-    actions = {
-        Action(
-            name='pre_x',
-            requirements={'pre_x'},
-            add_effects=set(),
-            delete_effects=set(),
-        ),
-        Action(
-            name='pre_y',
-            requirements={'pre_y'},
-            add_effects=set(),
-            delete_effects=set(),
+    graph = [
+        Layer(
+            actions=[add_x],
+            mutex_actions={},
+            propositions={'x'},
+            mutex_propositions={},
         )
-    }
+    ]
+    goal = {'x'}
 
-    expected_subgoal = {'pre_x', 'pre_y'}
+    solver = GraphSolver()
 
-    assert planner._goal_calculate_subgoal(actions) == expected_subgoal
+    plan = solver.search_for_solution(graph, goal)
+
+    assert plan == [add_x]
+
+
+def test_graph_goal_not_found():
+    add_x = build_action(name='add_x', add_effects={'x'})
+
+    graph = [
+        Layer(
+            actions=[add_x],
+            mutex_actions={},
+            propositions={'x'},
+            mutex_propositions={},
+        )
+    ]
+    goal = {'y'}
+
+    solver = GraphSolver()
+
+    with pytest.raises(PlanNotFound):
+        solver.search_for_solution(graph, goal)
+
+
+def test_graph_goal_not_possible():
+    add_x = build_action(name='add_x', add_effects={'x'})
+
+    graph = [
+        Layer(
+            actions=[add_x],
+            mutex_actions={},
+            propositions={'x'},
+            mutex_propositions={},
+        ),
+        Layer(
+            actions=[add_x],
+            mutex_actions={},
+            propositions={'x'},
+            mutex_propositions={},
+        )
+    ]
+    goal = {'y'}
+
+    solver = GraphSolver()
+
+    with pytest.raises(PlanNotPossible):
+        solver.search_for_solution(graph, goal)
 
 
 def test_plan_simple():
