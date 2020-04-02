@@ -2,7 +2,7 @@ import collections
 import itertools
 import json
 import logging
-import operator
+import re
 import typing
 
 import attr
@@ -47,8 +47,7 @@ class Layer(object):
 class Action(object):
     name = attr.ib(type=str)
     requirements = attr.ib(type=typing.Set[PropositionLabel], hash=False)
-    add_effects = attr.ib(type=typing.Set[PropositionLabel], hash=False)
-    delete_effects = attr.ib(type=typing.Set[PropositionLabel], hash=False)
+    effects = attr.ib(type=typing.Set[PropositionLabel], hash=False)
 
     def copy(self, **changes):
         return attr.evolve(self, **changes)
@@ -58,8 +57,7 @@ class Action(object):
         return cls(
             name=f'noop_{proposition}',
             requirements={proposition},
-            add_effects={proposition},
-            delete_effects=set(),
+            effects={proposition},
         )
 
 
@@ -104,11 +102,24 @@ class GraphBuilder(object):
     def _is_action_mutex(cls, mutex_propositions, action_a: Action, action_b: Action):
         log.debug('Checking mutex conditions for %s, %s', action_a, action_b)
 
-        if action_a.delete_effects.intersection(action_b.add_effects):
+        def opposite_effect(effect: str):
+            match = re.search(r'([^_]*)__unset', effect)
+
+            if match is None:
+                return f'{effect}__unset'
+
+            proposition = match.group(1)
+            return proposition
+
+        delete_effects = {
+            opposite_effect(effect) for effect in action_a.effects
+        }
+
+        if delete_effects.intersection(action_b.effects):
             log.debug('Action a deletes an effect of action B. Mutex condition found')
             return True
 
-        if action_a.delete_effects.intersection(action_b.requirements):
+        if delete_effects.intersection(action_b.requirements):
             log.debug('Action a deletes a precondition of action B. Mutex condition found')
             return True
 
@@ -148,7 +159,7 @@ class GraphBuilder(object):
         propositions = [
             proposition
             for action in actions
-            for proposition in action.add_effects.union(action.delete_effects)
+            for proposition in action.effects
         ]
         return set(propositions)
 
@@ -164,7 +175,7 @@ class GraphBuilder(object):
         for proposition, action in (
                 (proposition, action)
                 for action in actions
-                for proposition in action.add_effects
+                for proposition in action.effects
         ):
             log.info('Proposition %s - action %s', proposition, action)
             prop_actions[proposition].append(action)
@@ -262,7 +273,7 @@ class GraphSolver(object):
         for proposition, action in (
             (proposition, action)
             for action in layer.actions
-            for proposition in action.add_effects
+            for proposition in action.effects
         ):
             log.info('Proposition %s - action %s', proposition, action)
             prop_actions[proposition].append(action)
