@@ -19,8 +19,12 @@ PropositionLabel = str
 class Layer(object):
     actions = attr.ib(type=typing.List['Action'])
     propositions = attr.ib(type=typing.Set[PropositionLabel])
-    mutex_actions = attr.ib(type=typing.Dict['Action', typing.Set['Action']], default=attr.Factory(dict))
-    mutex_propositions = attr.ib(type=typing.Dict[PropositionLabel, typing.Set[PropositionLabel]], default=attr.Factory(dict))
+    mutex_actions = attr.ib(
+        type=typing.Dict['Action', typing.Set['Action']],
+        default=attr.Factory(dict))
+    mutex_propositions = attr.ib(
+        type=typing.Dict[PropositionLabel, typing.Set[PropositionLabel]],
+        default=attr.Factory(dict))
 
     def copy(self, **changes):
         return attr.evolve(self, **changes)
@@ -286,7 +290,7 @@ class GraphSolver(object):
         return (
             set(action_set)
             for action_set in itertools.product(*goal_actions)
-            if not self._goal_is_action_set_mutex(mutex_actions, action_set)
+            if not self._goal_is_action_set_mutex(mutex_actions, list(action_set))
         )
 
     def _goal_calculate_subgoal(
@@ -365,6 +369,7 @@ class Planner(object):
         ]
 
         plan_found = False
+        plan = None
 
         while not plan_found:
             log.info('Attempting to find solution by adding a layer')
@@ -389,7 +394,7 @@ class Planner(object):
                 log.info('Plan is not possible')
                 break
 
-        if not plan_found:
+        if not plan_found or plan is None:
             log.info('Plan does not seem to be possible')
             raise PlanNotPossible
 
