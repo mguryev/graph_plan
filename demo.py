@@ -2,7 +2,9 @@ import graph_plan
 
 
 def run():
-    starting_state = set()
+    starting_state = {
+        'downtime'
+    }
 
     desired_state = {
         'status__in-service'

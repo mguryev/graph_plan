@@ -308,7 +308,7 @@ class GraphSolver(object):
         log.info('Searching for solution for goal: %s', goal)
 
         if goal == set():
-            log.info('Goal is achieved!')
+            log.info('Goal is empty set. We can always achieve that!')
             return []
 
         if self._plan_is_stalled(layers):
@@ -320,6 +320,10 @@ class GraphSolver(object):
         if not self._plan_goal_reached(current_layer, goal):
             log.info('Goal is not reached in the current layer. Solution is not found')
             raise PlanNotFound()
+
+        if not current_layer.actions:
+            log.info('Goal is achieved, and layer has no actions. Nothing to do here')
+            return []
 
         log.info('Searching for action sets that can achieve the goal')
         for goal_actions in self._goal_search_actions(current_layer, goal):
