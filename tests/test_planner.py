@@ -1,12 +1,13 @@
 import pytest
 
-from graph_plan.planner import Planner, Action, Layer
-from graph_plan.planner import GraphBuilder, GraphSolver
-from graph_plan.planner import PlanNotFound, PlanNotPossible
+from graph_plan import planner
+# from graph_plan.planner import Planner, Action, Layer
+# from graph_plan.planner import GraphBuilder, GraphSolver
+# from graph_plan.planner import PlanNotFound, PlanNotPossible
 
 
 def build_layer(**kwargs):
-    empty_layer = Layer(
+    empty_layer = planner.Layer(
         actions=[],
         propositions=set(),
         mutex_actions={},
@@ -19,7 +20,7 @@ def build_layer(**kwargs):
 
 
 def build_action(name, **kwargs):
-    action_template = Action(
+    action_template = planner.Action(
         name=name,
         requirements=set(),
         effects=set(),
@@ -29,23 +30,23 @@ def build_action(name, **kwargs):
 
 
 def test_graph_layer_build_empty():
-    builder = GraphBuilder()
+    builder = planner.GraphBuilder()
 
     next_layer = builder.calculate_next_layer(
         current_state=build_layer(),
         available_actions=[],
     )
 
-    assert next_layer == Layer(
+    assert next_layer == planner.Layer(
         actions=[],
         propositions=set(),
     )
 
 
 def test_graph_layer_add_actions():
-    builder = GraphBuilder()
+    builder = planner.GraphBuilder()
 
-    action_add_x = Action(
+    action_add_x = planner.Action(
         name='add_x',
         requirements=set(),
         effects=set(),
@@ -62,9 +63,9 @@ def test_graph_layer_add_actions():
 
 
 def test_graph_layer_action_requirements():
-    builder = GraphBuilder()
+    builder = planner.GraphBuilder()
 
-    action = Action(
+    action = planner.Action(
         name='add_x',
         requirements=set('not_met_requirement'),
         effects=set(),
@@ -77,14 +78,14 @@ def test_graph_layer_action_requirements():
         ]
     )
 
-    assert next_layer == Layer(
+    assert next_layer == planner.Layer(
         actions=[],
         propositions=set(),
     )
 
 
 def test_graph_layer_actions_noop():
-    builder = GraphBuilder()
+    builder = planner.GraphBuilder()
 
     next_layer = builder.calculate_next_layer(
         current_state=build_layer(
@@ -93,7 +94,7 @@ def test_graph_layer_actions_noop():
         available_actions=[],
     )
 
-    noop_action = Action(
+    noop_action = planner.Action(
         name='noop_x',
         requirements={'x'},
         effects={'x'},
@@ -114,7 +115,7 @@ def test_graph_layer_actions_noop():
         ),
     ])
 def test_graph_layer_actions_mutex(action_a_kwargs, action_b_kwargs, state_kwargs):
-    builder = GraphBuilder()
+    builder = planner.GraphBuilder()
 
     action_a = build_action(name='action_a', **action_a_kwargs)
     action_b = build_action(name='action_b', **action_b_kwargs)
@@ -139,7 +140,7 @@ def test_graph_layer_actions_mutex(action_a_kwargs, action_b_kwargs, state_kwarg
         ({'effects': {'x', 'x__unset'}}, {'x', 'x__unset'}),
     ])
 def test_graph_layer_propositions(action_kwargs, expected_propositions):
-    builder = GraphBuilder()
+    builder = planner.GraphBuilder()
 
     action = build_action('action', **action_kwargs)
 
@@ -152,7 +153,7 @@ def test_graph_layer_propositions(action_kwargs, expected_propositions):
 
 
 def test_graph_layer_propositions_mutex():
-    builder = GraphBuilder()
+    builder = planner.GraphBuilder()
 
     action_a = build_action(name='action_a', effects={'x', 'y__unset'})
     action_b = build_action(name='action_b', effects={'y', 'x__unset'})
@@ -174,11 +175,11 @@ def test_graph_layer_propositions_mutex():
 
 
 def test_graph_goal_found():
-    solver = GraphSolver()
+    solver = planner.GraphSolver()
 
     add_x = build_action(name='add_x', effects={'x'})
     graph = [
-        Layer(
+        planner.Layer(
             actions=[add_x],
             mutex_actions={},
             propositions={'x'},
@@ -192,12 +193,12 @@ def test_graph_goal_found():
 
 
 def test_graph_goal_not_found():
-    solver = GraphSolver()
+    solver = planner.GraphSolver()
 
     add_x = build_action(name='add_x', effects={'x'})
 
     graph = [
-        Layer(
+        planner.Layer(
             actions=[add_x],
             mutex_actions={},
             propositions={'x'},
@@ -205,22 +206,22 @@ def test_graph_goal_not_found():
         )
     ]
 
-    with pytest.raises(PlanNotFound):
+    with pytest.raises(planner.PlanNotFound):
         solver.search_for_solution(graph, goal={'y'})
 
 
 def test_graph_goal_not_possible():
-    solver = GraphSolver()
+    solver = planner.GraphSolver()
 
     add_x = build_action(name='add_x', effects={'x'})
     graph = [
-        Layer(
+        planner.Layer(
             actions=[add_x],
             mutex_actions={},
             propositions={'x'},
             mutex_propositions={},
         ),
-        Layer(
+        planner.Layer(
             actions=[add_x],
             mutex_actions={},
             propositions={'x'},
@@ -228,32 +229,46 @@ def test_graph_goal_not_possible():
         )
     ]
 
-    with pytest.raises(PlanNotPossible):
+    with pytest.raises(planner.PlanNotPossible):
         solver.search_for_solution(graph, goal={'y'})
 
 
+def test_state_from_world():
+    world = {
+        'x': 'set',
+        'y': '',
+        'z': False,
+    }
+
+    expected = {
+        'x', 'y__unset', 'z__unset'
+    }
+
+    assert planner.state_from_world(world) == expected
+
+
 def test_plan_simple():
-    add_x = Action(
+    add_x = planner.Action(
         name='add_x',
         requirements=set(),
         effects={'x'},
     )
 
-    add_y = Action(
+    add_y = planner.Action(
         name='add_y',
         requirements={'x'},
         effects={'y'},
     )
 
-    replace_x_z = Action(
+    replace_x_z = planner.Action(
         name='replace_x_z',
         requirements={'x'},
         effects={'z', 'x__unset'},
     )
 
-    planner = Planner()
+    _planner = planner.Planner()
 
-    assert planner.plan(
+    assert _planner.plan(
         state=set(),
         goal={'x', 'y', 'z'},
         actions={

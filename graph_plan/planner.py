@@ -407,3 +407,16 @@ class Planner(object):
             for action in plan
             if not action.name.startswith('noop_')
         ]
+
+
+def state_from_world(world: typing.Dict[str, typing.Any]) -> typing.Set[PropositionLabel]:
+    def proposition_from_json(k, v):
+        if v:
+            return k
+        else:
+            return f"{k}__unset"
+
+    return {
+        proposition_from_json(k, v)
+        for k, v in world.items()
+    }
