@@ -247,6 +247,28 @@ def test_state_from_world():
     assert planner.state_from_world(world) == expected
 
 
+def test_update_world():
+    state = {
+        'x', 'y', 'z'
+    }
+
+    update = {'x'}
+
+    add_x = build_action(name='add_x', effects={'x'})
+    add_y = build_action(name='add_x', requirements={'x'}, effects={'y'})
+    add_z = build_action(name='add_z', requirements={'y'}, effects={'z'})
+
+    actions = {add_x, add_y, add_z}
+
+    expected_plan = [
+        add_x, add_y
+    ]
+
+    _planner = planner.Planner()
+
+    assert _planner.plan_state_update(state, update, actions) == expected_plan
+
+
 def test_plan_simple():
     add_x = planner.Action(
         name='add_x',

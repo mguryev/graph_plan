@@ -408,6 +408,51 @@ class Planner(object):
             if not action.name.startswith('noop_')
         ]
 
+    def plan_state_update(
+            self,
+            state: typing.Set[PropositionLabel],
+            update: typing.Set[PropositionLabel],
+            actions: typing.Set[Action],
+    ) -> typing.List[Action]:
+        log.info('Calculating propositions that could be meaningful to the plan')
+        plan_props = {
+            prop
+            for action in actions
+            for prop in action.requirements.union(action.effects)
+        }
+        log.info('Plan relevant propositions: %s', plan_props)
+
+        log.info('Filtering state to only include plan-relevant props')
+        state = {
+            prop
+            for prop in state
+            if prop in plan_props
+        }
+        log.info('Filtered state: %s', state)
+
+        log.info('Calculating effects that depend on propositions in state update')
+        dependent_effects = {
+            prop
+            for action in actions
+            for prop in action.effects
+            if update.intersection(action.requirements)
+        }
+        log.info('Dependent effects: %s', dependent_effects)
+
+        invalidated_propositions = update.union(dependent_effects)
+        log.info('Invalidated effects: %s', invalidated_propositions)
+
+        log.info('Updating state by removing invalidated effects')
+        original_state = state
+        state = state.difference(invalidated_propositions)
+        log.info('Updated state: %s', state)
+
+        return self.plan(
+            state,
+            goal=original_state,
+            actions=actions,
+        )
+
 
 def state_from_world(world: typing.Dict[str, typing.Any]) -> typing.Set[PropositionLabel]:
     def proposition_from_json(k, v):
