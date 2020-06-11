@@ -1,4 +1,5 @@
 import graph_plan
+import json
 
 
 ACTIONS = [
@@ -54,6 +55,7 @@ ACTIONS = [
 
 
 def describe_actions():
+    print('')
     print('Available actions:')
     print('')
 
@@ -78,7 +80,8 @@ def demo1():
 
     starting_state = graph_plan.state_from_world(host)
     print('')
-    print(f'Starting state: {starting_state}')
+    print('Starting state:')
+    print(json.dumps(host, indent=2, sort_keys=True))
     print('=====')
 
     desired_state = {
@@ -122,7 +125,8 @@ def demo2():
 
     starting_state = graph_plan.state_from_world(host)
     print('')
-    print(f'Starting state: {starting_state}')
+    print('Starting state:')
+    print(json.dumps(host, indent=2, sort_keys=True))
     print('=====')
 
     update = {
@@ -166,7 +170,8 @@ def demo3():
 
     starting_state = graph_plan.state_from_world(host)
     print('')
-    print(f'Starting state: {starting_state}')
+    print('Starting state:')
+    print(json.dumps(host, indent=2, sort_keys=True))
     print('=====')
 
     update = {
