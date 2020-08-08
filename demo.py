@@ -73,9 +73,6 @@ def demo1():
     print('=====')
 
     host = {
-        'ip_address': '169.254.169.1',
-        'ip_address_ipmi': '',
-        'downtime': False,
     }
 
     starting_state = graph_plan.state_from_world(host)

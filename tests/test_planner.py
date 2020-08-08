@@ -1,9 +1,6 @@
 import pytest
 
 from graph_plan import planner
-# from graph_plan.planner import Planner, Action, Layer
-# from graph_plan.planner import GraphBuilder, GraphSolver
-# from graph_plan.planner import PlanNotFound, PlanNotPossible
 
 
 def build_layer(**kwargs):
